@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Global Fund, IDA and Gavi disbursements</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="data.js"></script>
+<style>
+  :root {
+    --ink: #1B2533;
+    --muted: #5B6676;
+    --rule: #DDE2E8;
+    --panel: #F3F5F8;
+    --paper: #FFFFFF;
+    --focus: #1F5FA8;
+    --gf: #C8283E;
+    --ida: #1F5FA8;
+    --gavi: #0B8F80;
+    --font: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--font); font-size: 16px; line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+  header { padding: 40px 0 8px; }
+  h1 { font-size: clamp(1.6rem, 3vw, 2.25rem); line-height: 1.15; font-weight: 700;
+       letter-spacing: -0.01em; margin: 0 0 10px; max-width: 26ch; }
+  .lede { color: var(--muted); margin: 0; max-width: 70ch; }
+
+  .funder-key { display: flex; flex-wrap: wrap; gap: 18px; margin: 22px 0 0; padding: 0; list-style: none; }
+  .funder-key li { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: .95rem; }
+  .funder-key i { width: 22px; height: 4px; border-radius: 2px; display: inline-block; }
+
+  nav[role="tablist"] { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin: 28px 0 0; }
+  nav button {
+    font: inherit; font-weight: 600; color: var(--muted); background: none; border: 0;
+    padding: 12px 16px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px;
+  }
+  nav button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+  button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible {
+    outline: 3px solid var(--focus); outline-offset: 2px;
+  }
+
+  section[role="tabpanel"] { padding: 28px 0 48px; }
+  section[hidden] { display: none; }
+
+  .toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 16px 24px; margin-bottom: 20px; }
+  label.field { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; font-weight: 600; color: var(--muted); }
+  select {
+    font: inherit; color: var(--ink); background: var(--paper); border: 1px solid #B9C2CE;
+    border-radius: 6px; padding: 8px 10px; min-width: 240px;
+  }
+  .switch { display: flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--muted); }
+
+  .panels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .panel { background: var(--panel); border-radius: 10px; padding: 16px 12px 8px; }
+  .panel h2 { font-size: 1.05rem; margin: 0 4px 2px; }
+  .panel .total { font-size: .9rem; color: var(--muted); margin: 0 4px 6px; }
+  .chart-sm { height: 300px; }
+
+  h3 { font-size: 1.05rem; margin: 36px 0 10px; }
+  .table-scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: .93rem; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: .85rem; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  td.id a { color: var(--ida); font-size: .85rem; word-break: break-all; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 8px; vertical-align: baseline; }
+
+  .country-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; margin: 4px 0 6px; }
+  .country-head h2 { font-size: 1.6rem; margin: 0; }
+  .country-head .tag { color: var(--muted); }
+  .country-head .big { font-size: 1.15rem; font-weight: 600; }
+  .chart-lg { height: 440px; }
+  .empty { background: var(--panel); border-radius: 10px; padding: 28px; color: var(--muted); }
+
+  /* Country context */
+  .context { margin-top: 44px; padding-top: 4px; }
+  .context > h3 { margin-top: 0; }
+  .ctx-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 32px; }
+  .ctx-group h4 { font-size: .9rem; font-weight: 600; color: var(--muted); margin: 14px 0 4px; }
+  .ctx-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 84px; align-items: center;
+             gap: 4px 12px; padding: 7px 0; border-bottom: 1px solid var(--rule); }
+  .ctx-label { font-size: .9rem; line-height: 1.3; }
+  .ctx-value { text-align: right; white-space: nowrap; font-weight: 600; }
+  .ctx-value small { display: block; font-weight: 400; color: var(--muted); font-size: .78rem; }
+  .ctx-none { color: var(--muted); font-weight: 400; }
+  .spark { width: 84px; height: 26px; display: block; }
+  .ctx-health { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 24px;
+                align-items: start; margin-top: 28px; }
+  .ctx-health h4 { font-size: 1rem; margin: 0 0 4px; }
+  .ctx-health p { color: var(--muted); font-size: .9rem; margin: 0; max-width: 46ch; }
+  .chart-md { height: 300px; }
+  .ctx-note { color: var(--muted); font-size: .82rem; margin: 16px 0 0; max-width: 90ch; }
+  .ctx-note .dash { display: inline-block; width: 18px; border-top: 2px dashed var(--muted); vertical-align: middle; margin: 0 4px; }
+
+  footer { border-top: 1px solid var(--rule); padding: 20px 0 40px; color: var(--muted); font-size: .85rem; }
+  footer p { max-width: 90ch; margin: 0 0 6px; }
+
+  @media (max-width: 860px) {
+    .panels { grid-template-columns: 1fr; }
+    .ctx-groups, .ctx-health { grid-template-columns: 1fr; }
+    select { min-width: 0; width: 100%; }
+    label.field { flex: 1 1 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Disbursements from the Global Fund, World Bank IDA and Gavi</h1>
+    <p class="lede" id="lede">Annual disbursements reported to IATI, in US dollars, to low and middle income countries.</p>
+    <ul class="funder-key" aria-label="Funder colours">
+      <li><i style="background:var(--gf)"></i>Global Fund</li>
+      <li><i style="background:var(--ida)"></i>World Bank IDA</li>
+      <li><i style="background:var(--gavi)"></i>Gavi</li>
+    </ul>
+  </header>
+
+  <nav role="tablist" aria-label="Dashboard views">
+    <button role="tab" id="tab-income" aria-controls="panel-income" aria-selected="true">By income group</button>
+    <button role="tab" id="tab-country" aria-controls="panel-country" aria-selected="false" tabindex="-1">By country</button>
+  </nav>
+
+  <section role="tabpanel" id="panel-income" aria-labelledby="tab-income">
+    <div class="toolbar">
+      <label class="switch"><input type="checkbox" id="shared-scale" checked> Same scale on all three charts</label>
+    </div>
+    <div class="panels" id="income-panels"></div>
+    <h3>Total disbursed by funder and income group</h3>
+    <div class="table-scroll"><table id="income-table"></table></div>
+  </section>
+
+  <section role="tabpanel" id="panel-country" aria-labelledby="tab-country" hidden>
+    <div class="toolbar">
+      <label class="field">Country
+        <select id="country-select"></select>
+      </label>
+      <label class="field">Funder
+        <select id="funder-select">
+          <option value="Global Fund">Global Fund</option>
+          <option value="World Bank IDA">World Bank IDA</option>
+          <option value="Gavi">Gavi</option>
+          <option value="all">All three</option>
+        </select>
+      </label>
+    </div>
+    <div class="country-head" id="country-head"></div>
+    <div id="country-body"></div>
+    <section class="context" id="country-context" aria-labelledby="ctx-title"></section>
+    <div id="country-activities"></div>
+  </section>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+(function () {
+  const D = window.DASH;
+  if (!D) {
+    document.getElementById("income-panels").innerHTML =
+      '<p class="empty">docs/data.js is missing. Run build_dashboard.R, then commit docs/data.js.</p>';
+    return;
+  }
+
+  const COLORS = { "Global Fund": "#C8283E", "World Bank IDA": "#1F5FA8", "Gavi": "#0B8F80" };
+  const ACTIVITY_PALETTE = ["#1F5FA8", "#C8283E", "#0B8F80", "#E09F1F", "#6C4BA6",
+                            "#3E8E41", "#D4568C", "#4F6D8A", "#9A6B3F", "#2BA3C4"];
+  const OTHER_COLOR = "#B9C2CE";
+  const TOP_N = 9;
+  const years = [];
+  for (let y = D.meta.start_year; y <= D.meta.end_year; y++) years.push(y);
+  const thisYear = new Date().getFullYear();
+
+  const fmt = v => {
+    const a = Math.abs(v);
+    if (a >= 1e9) return "$" + (v / 1e9).toFixed(a >= 1e10 ? 1 : 2) + "bn";
+    if (a >= 1e6) return "$" + (v / 1e6).toFixed(a >= 1e8 ? 0 : 1) + "m";
+    if (a >= 1e3) return "$" + (v / 1e3).toFixed(0) + "k";
+    return "$" + Math.round(v);
+  };
+  const esc = s => String(s ?? "").replace(/[&<>"']/g,
+    c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const trunc = (s, n) => s.length > n ? s.slice(0, n - 1) + "…" : s;
+
+  const plotConfig = { displaylogo: false, responsive: true,
+    modeBarButtonsToRemove: ["lasso2d", "select2d", "autoScale2d", "zoomIn2d", "zoomOut2d"] };
+  const baseLayout = () => ({
+    font: { family: "Public Sans, system-ui, sans-serif", color: "#1B2533", size: 12 },
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    margin: { l: 56, r: 12, t: 8, b: 36 },
+    xaxis: { tickmode: "array", tickvals: years.filter(y => y % 2 === 1 || years.length < 8),
+             showgrid: false, linecolor: "#B9C2CE", fixedrange: true },
+    yaxis: { tickprefix: "$", exponentformat: "B", gridcolor: "#DDE2E8", zeroline: false, fixedrange: true },
+    hovermode: "x unified", showlegend: false
+  });
+
+  // ---------- Header / footer copy ----------
+  document.getElementById("lede").textContent =
+    `Annual disbursements reported to IATI, in US dollars, ${D.meta.start_year}–${D.meta.end_year}, ` +
+    `to countries classified as low, lower-middle or upper-middle income in the World Bank's ` +
+    `${D.meta.classification} classification.`;
+  document.getElementById("footer").innerHTML =
+    `<p>Source: IATI data ${D.meta.source === "d-portal" ? "via d-portal, converted to US dollars at IMF rates" : "from the IATI Datastore"}, ` +
+    `disbursements published by the Global Fund (47045), the World Bank (44000, IDA flows only) and Gavi (47122). ` +
+    `Data built ${esc(D.meta.built)}.</p>` +
+    `<p>Countries are grouped by their ${esc(D.meta.classification)} income classification for every year, ` +
+    `not the classification at the time of disbursement. ` +
+    `${D.meta.end_year >= thisYear ? D.meta.end_year + " is a partial year. " : ""}` +
+    (D.meta.excluded_multi + D.meta.dropped_non_usd > 0
+      ? `Excluded: ${D.meta.excluded_multi.toLocaleString()} multi-country disbursements and ` +
+        `${D.meta.dropped_non_usd.toLocaleString()} without a US dollar value.`
+      : "") + `</p>`;
+
+  // ---------- Tabs ----------
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  function selectTab(tab, focus) {
+    tabs.forEach(t => {
+      const on = t === tab;
+      t.setAttribute("aria-selected", on);
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+    });
+    if (focus) tab.focus();
+    if (tab.id === "tab-country") { renderCountry(); }
+    else { renderIncome(); }
+    updateHash();
+  }
+  tabs.forEach((t, i) => {
+    t.addEventListener("click", () => selectTab(t));
+    t.addEventListener("keydown", e => {
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        const next = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+        selectTab(next, true);
+      }
+    });
+  });
+
+  // ---------- Tab 1: income groups ----------
+  const incomeByKey = {};
+  D.income.forEach(([f, g, y, v]) => { incomeByKey[`${f}|${g}|${y}`] = v; });
+  const series = (f, g) => years.map(y => incomeByKey[`${f}|${g}|${y}`] || 0);
+
+  const panelsEl = document.getElementById("income-panels");
+  D.income_groups.forEach((g, i) => {
+    const total = D.funders.reduce((s, f) => s + series(f, g).reduce((a, b) => a + b, 0), 0);
+    panelsEl.insertAdjacentHTML("beforeend",
+      `<div class="panel"><h2>${esc(g)}</h2><p class="total">${fmt(total)} since ${D.meta.start_year}</p>` +
+      `<div class="chart-sm" id="income-chart-${i}" role="img" aria-label="Disbursements to ${esc(g)} countries by year and funder"></div></div>`);
+  });
+
+  function renderIncome() {
+    const shared = document.getElementById("shared-scale").checked;
+    let maxY = 0;
+    D.income_groups.forEach(g => D.funders.forEach(f => {
+      maxY = Math.max(maxY, ...series(f, g));
+    }));
+    D.income_groups.forEach((g, i) => {
+      const traces = D.funders.map(f => ({
+        x: years, y: series(f, g), name: f, type: "scatter", mode: "lines+markers",
+        line: { color: COLORS[f], width: 2.5 }, marker: { size: 5 },
+        hovertemplate: "%{customdata}<extra>" + f + "</extra>",
+        customdata: series(f, g).map(fmt)
+      }));
+      const layout = baseLayout();
+      if (shared) layout.yaxis.range = [0, maxY * 1.06];
+      else layout.yaxis.rangemode = "tozero";
+      const el = document.getElementById(`income-chart-${i}`);
+      Plotly.react(el, traces, layout, plotConfig);
+    });
+  }
+  document.getElementById("shared-scale").addEventListener("change", renderIncome);
+
+  // Totals table
+  (function () {
+    let html = "<thead><tr><th>Funder</th>" +
+      D.income_groups.map(g => `<th class="num">${esc(g)}</th>`).join("") +
+      '<th class="num">Total</th></tr></thead><tbody>';
+    D.funders.forEach(f => {
+      const vals = D.income_groups.map(g => series(f, g).reduce((a, b) => a + b, 0));
+      html += `<tr><td><span class="swatch" style="background:${COLORS[f]}"></span>${esc(f)}</td>` +
+        vals.map(v => `<td class="num">${fmt(v)}</td>`).join("") +
+        `<td class="num"><strong>${fmt(vals.reduce((a, b) => a + b, 0))}</strong></td></tr>`;
+    });
+    document.getElementById("income-table").innerHTML = html + "</tbody>";
+  })();
+
+
+  // ---------- Country context (IMF WEO + World Bank WDI) ----------
+  const CTX = D.context || null;
+  const ctxMeta = {};
+  if (CTX) CTX.indicators.forEach(([key, label, fmtType, group, source]) => {
+    ctxMeta[key] = { key, label, fmt: fmtType, group, source };
+  });
+  const HEALTH_SOURCES = [
+    ["gghe_pc", "#4F6D8A"], ["pvt_pc", "#C9A86A"], ["ext_pc", "#7A4FA8"]
+  ];
+
+  function fmtCtx(v, type) {
+    if (v == null || isNaN(v)) return "–";
+    switch (type) {
+      case "people":
+        return v >= 1e9 ? (v / 1e9).toFixed(2) + " billion"
+             : v >= 1e6 ? (v / 1e6).toFixed(1) + " million"
+             : Math.round(v).toLocaleString("en-US");
+      case "usd":     return "$" + Math.round(v).toLocaleString("en-US");
+      case "pct":     return v.toFixed(1) + "%";
+      case "pct_gdp": return v.toFixed(1) + "% of GDP";
+      case "years":   return v.toFixed(1) + " years";
+      case "rate":    return Math.round(v).toString();
+      default:        return String(v);
+    }
+  }
+
+  // Small trend line; IMF projections drawn dashed after the last actual year
+  function sparkline(series) {
+    if (!series || series.length < 2) return '<svg class="spark" aria-hidden="true"></svg>';
+    const W = 84, H = 26, P = 3;
+    const xs = series.map(p => p[0]), ys = series.map(p => p[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    let y0 = Math.min(...ys), y1 = Math.max(...ys);
+    if (y0 === y1) { y0 -= 1; y1 += 1; }
+    const X = x => P + (x - x0) / (x1 - x0 || 1) * (W - 2 * P);
+    const Y = y => H - P - (y - y0) / (y1 - y0) * (H - 2 * P);
+    const pts = series.map(p => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`);
+    const firstProj = series.findIndex(p => p[2] === 1);
+    const actual = firstProj === -1 ? pts : pts.slice(0, firstProj);
+    const proj = firstProj === -1 ? [] : pts.slice(Math.max(0, firstProj - 1));
+    const last = series[(firstProj === -1 ? series.length : firstProj) - 1] || series[0];
+    const zero = y0 < 0 && y1 > 0
+      ? `<line x1="${P}" x2="${W - P}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="#DDE2E8" stroke-width="1"/>` : "";
+    return `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true">${zero}` +
+      (actual.length > 1 ? `<polyline points="${actual.join(" ")}" fill="none" stroke="#1B2533" stroke-width="1.5"/>` : "") +
+      (proj.length > 1 ? `<polyline points="${proj.join(" ")}" fill="none" stroke="#5B6676" stroke-width="1.5" stroke-dasharray="3 2"/>` : "") +
+      `<circle cx="${X(last[0]).toFixed(1)}" cy="${Y(last[1]).toFixed(1)}" r="2.2" fill="#1B2533"/></svg>`;
+  }
+
+  function renderContext(iso2, name) {
+    const el = document.getElementById("country-context");
+    if (!CTX) { el.innerHTML = ""; return; }
+    const vals = (CTX.values || {})[iso2] || {};
+    const groups = ["Population", "Economy", "Health spending"];
+
+    const groupHtml = groups.map(g => {
+      const rowsHtml = Object.values(ctxMeta).filter(m => m.group === g).map(m => {
+        const series = vals[m.key] || [];
+        const actual = series.filter(p => p[2] !== 1);
+        const latest = actual.length ? actual[actual.length - 1] : series[series.length - 1];
+        const value = latest
+          ? `${fmtCtx(latest[1], m.fmt)}<small>${latest[0]}${latest[2] === 1 ? ", IMF projection" : ""}</small>`
+          : `<span class="ctx-none">No data</span>`;
+        return `<div class="ctx-row"><span class="ctx-label">${esc(m.label)}</span>` +
+          `<span class="ctx-value">${value}</span>${sparkline(series)}</div>`;
+      }).join("");
+      return `<div class="ctx-group"><h4>${esc(g)}</h4>${rowsHtml}</div>`;
+    }).join("");
+
+    // Health spending per person by source
+    const hYears = [...new Set(HEALTH_SOURCES.flatMap(([k]) => (vals[k] || []).map(p => p[0])))].sort();
+    const hasHealth = hYears.length > 0;
+    const ext = vals.ext_share || [], lastExt = ext[ext.length - 1];
+    const hText = hasHealth
+      ? `Current health spending per person, split by who pays. ` +
+        (lastExt ? `In ${lastExt[0]}, external sources financed ${lastExt[1].toFixed(0)}% of health spending in ${esc(name)}.` : "")
+      : `No health spending data for ${esc(name)} in the World Development Indicators.`;
+
+    const projYears = Object.values(vals).flat().filter(p => p[2] === 1).map(p => p[0]);
+    el.innerHTML =
+      `<h3 id="ctx-title">Country context</h3>` +
+      `<div class="ctx-groups">${groupHtml}</div>` +
+      `<div class="ctx-health"><div>` +
+        (hasHealth ? `<div class="chart-md" id="ctx-health-chart" role="img" aria-label="Health spending per person by source in ${esc(name)}"></div>` : "") +
+      `</div><div><h4>Who pays for health</h4><p>${hText}</p></div></div>` +
+      `<p class="ctx-note">Economy: ${esc(CTX.sources.weo)}` +
+        (projYears.length ? `; years after each indicator's latest actual data are IMF estimates or projections, drawn dashed<span class="dash"></span>` : "") +
+        `. Population and health: ${esc(CTX.sources.wdi)}. Health spending data lag by two to three years.</p>`;
+
+    if (hasHealth) {
+      const traces = HEALTH_SOURCES.map(([k, color]) => {
+        const byYear = Object.fromEntries((vals[k] || []).map(p => [p[0], p[1]]));
+        const ys = hYears.map(y => byYear[y] ?? null);
+        return { x: hYears, y: ys, type: "bar", name: ctxMeta[k].label, marker: { color },
+                 customdata: ys.map(v => fmtCtx(v, "usd")),
+                 hovertemplate: "%{customdata}<extra>" + esc(ctxMeta[k].label) + "</extra>" };
+      });
+      const layout = baseLayout();
+      layout.barmode = "stack";
+      layout.hovermode = "x unified";
+      layout.showlegend = true;
+      layout.legend = { orientation: "h", y: -0.18, x: 0, font: { size: 11 } };
+      layout.xaxis.tickvals = hYears;
+      layout.margin.b = 48;
+      Plotly.newPlot(document.getElementById("ctx-health-chart"), traces, layout, plotConfig);
+    }
+  }
+
+  // ---------- Tab 2: country ----------
+  const rowsByCountry = {};
+  D.rows.forEach(r => { (rowsByCountry[r[0]] = rowsByCountry[r[0]] || []).push(r); });
+  const countryInfo = {};
+  D.countries.forEach(([iso2, name, group]) => { countryInfo[iso2] = { name, group }; });
+
+  const countrySel = document.getElementById("country-select");
+  const funderSel = document.getElementById("funder-select");
+  D.income_groups.forEach(g => {
+    const og = document.createElement("optgroup");
+    og.label = g;
+    D.countries.filter(c => c[2] === g).forEach(([iso2, name]) => {
+      og.appendChild(new Option(name, iso2));
+    });
+    if (og.children.length) countrySel.appendChild(og);
+  });
+
+  function renderCountry() {
+    const iso2 = countrySel.value, funder = funderSel.value;
+    const info = countryInfo[iso2] || { name: iso2, group: "" };
+    const funderLabel = funder === "all" ? "all three funders" : funder;
+    const rows = (rowsByCountry[iso2] || []).filter(r => funder === "all" || r[1] === funder);
+
+    // Aggregate by activity
+    const acts = {};
+    rows.forEach(([, f, id, y, v]) => {
+      const a = acts[id] || (acts[id] = { id, funder: f, total: 0, byYear: {}, first: y, last: y });
+      a.total += v; a.byYear[y] = (a.byYear[y] || 0) + v;
+      a.first = Math.min(a.first, y); a.last = Math.max(a.last, y);
+    });
+    const list = Object.values(acts).sort((a, b) => b.total - a.total);
+    const total = list.reduce((s, a) => s + a.total, 0);
+
+    document.getElementById("country-head").innerHTML =
+      `<h2>${esc(info.name)}</h2><span class="tag">${esc(info.group)}</span>` +
+      `<span class="big">${fmt(total)} from ${esc(funderLabel)} since ${D.meta.start_year}</span>`;
+
+    const body = document.getElementById("country-body");
+    const actsEl = document.getElementById("country-activities");
+    renderContext(iso2, info.name);
+    if (!list.length) {
+      body.innerHTML = `<p class="empty">No disbursements from ${esc(funderLabel)} to ${esc(info.name)} ` +
+        `are reported in IATI since ${D.meta.start_year}. Choose another funder or country.</p>`;
+      actsEl.innerHTML = "";
+      return;
+    }
+
+    body.innerHTML =
+      `<div class="chart-lg" id="country-chart" role="img" aria-label="Disbursements to ${esc(info.name)} by year and activity"></div>`;
+    actsEl.innerHTML =
+      `<h3>Activities, largest first</h3><div class="table-scroll"><table id="activity-table"></table></div>`;
+
+    // Stack the largest activities; group the rest as "Other activities"
+    const top = list.slice(0, TOP_N), rest = list.slice(TOP_N);
+    const colorFor = {};
+    top.forEach((a, i) => { colorFor[a.id] = ACTIVITY_PALETTE[i % ACTIVITY_PALETTE.length]; });
+
+    const traces = top.map(a => {
+      const title = D.activities[a.id] || a.id;
+      const ys = years.map(y => a.byYear[y] || 0);
+      return {
+        x: years, y: ys, type: "bar", name: esc(trunc(title, 60)),
+        marker: { color: colorFor[a.id] },
+        customdata: ys.map(fmt),
+        hovertemplate: "%{customdata}<extra>" + esc(trunc(title, 50)) + "</extra>"
+      };
+    });
+    if (rest.length) {
+      const ys = years.map(y => rest.reduce((s, a) => s + (a.byYear[y] || 0), 0));
+      traces.push({ x: years, y: ys, type: "bar", name: `Other activities (${rest.length})`,
+        marker: { color: OTHER_COLOR }, customdata: ys.map(fmt),
+        hovertemplate: "%{customdata}<extra>Other activities</extra>" });
+    }
+    const layout = baseLayout();
+    layout.barmode = "stack";
+    layout.hovermode = "closest";
+    layout.showlegend = true;
+    layout.legend = { orientation: "h", y: -0.14, x: 0, font: { size: 11 } };
+    layout.margin.b = 40;
+    layout.xaxis.tickvals = years;
+    const chartEl = document.getElementById("country-chart");
+    chartEl.style.height = (440 + Math.ceil(traces.length / 2) * 18) + "px";
+    Plotly.newPlot(chartEl, traces, layout, plotConfig);
+
+    // Activity table
+    const showFunder = funder === "all";
+    let html = "<thead><tr><th>Activity</th><th>IATI identifier</th>" +
+      (showFunder ? "<th>Funder</th>" : "") +
+      '<th class="num">Years</th><th class="num">Disbursed</th></tr></thead><tbody>';
+    list.forEach(a => {
+      const sw = colorFor[a.id] || OTHER_COLOR;
+      html += `<tr><td><span class="swatch" style="background:${sw}"></span>${esc(D.activities[a.id] || a.id)}</td>` +
+        `<td class="id"><a href="https://d-portal.org/ctrack.html#view=act&aid=${encodeURIComponent(a.id)}" ` +
+        `target="_blank" rel="noopener">${esc(a.id)}</a></td>` +
+        (showFunder ? `<td>${esc(a.funder)}</td>` : "") +
+        `<td class="num">${a.first === a.last ? a.first : a.first + "–" + a.last}</td>` +
+        `<td class="num">${fmt(a.total)}</td></tr>`;
+    });
+    document.getElementById("activity-table").innerHTML = html + "</tbody>";
+  }
+
+  countrySel.addEventListener("change", () => { renderCountry(); updateHash(); });
+  funderSel.addEventListener("change", () => { renderCountry(); updateHash(); });
+
+  // ---------- Shareable links: #country=KE&funder=Gavi ----------
+  function updateHash() {
+    const countryTab = document.getElementById("tab-country").getAttribute("aria-selected") === "true";
+    const h = countryTab
+      ? `#country=${countrySel.value}&funder=${encodeURIComponent(funderSel.value)}`
+      : "#income";
+    history.replaceState(null, "", h);
+  }
+  function readHash() {
+    const p = new URLSearchParams(location.hash.slice(1));
+    if (p.has("country") && countryInfo[p.get("country")]) countrySel.value = p.get("country");
+    if (p.has("funder")) funderSel.value = p.get("funder");
+    if (p.has("country")) return selectTab(document.getElementById("tab-country"));
+    selectTab(document.getElementById("tab-income"));
+  }
+  readHash();
+})();
+</script>
+</body>
+</html>
