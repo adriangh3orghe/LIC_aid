@@ -172,6 +172,16 @@
   }
 
   const COLORS = { "Global Fund": "#C8283E", "World Bank IDA": "#1F5FA8", "Gavi": "#0B8F80" };
+  // Display name for each funder (e.g. "World Bank IDA (health)"), set by build_dashboard.R
+  const label = f => ((D.meta.funder_labels || {})[f]) || f;
+  document.querySelectorAll(".funder-key li").forEach((li, i) => {
+    li.lastChild.textContent = label(D.funders[i]);
+  });
+  document.querySelectorAll("#funder-select option").forEach(o => {
+    if (o.value !== "all") o.textContent = label(o.value);
+  });
+  document.querySelector("h1").textContent =
+    "Disbursements from the " + D.funders.map(label).join(", ").replace(/, ([^,]*)$/, " and $1");
   const ACTIVITY_PALETTE = ["#1F5FA8", "#C8283E", "#0B8F80", "#E09F1F", "#6C4BA6",
                             "#3E8E41", "#D4568C", "#4F6D8A", "#9A6B3F", "#2BA3C4"];
   const OTHER_COLOR = "#B9C2CE";
@@ -211,6 +221,10 @@
   document.getElementById("footer").innerHTML =
     `<p>Source: IATI data ${D.meta.source === "d-portal" ? "via d-portal, converted to US dollars at IMF rates" : "from the IATI Datastore"}, ` +
     `disbursements published by the Global Fund (47045), the World Bank (44000, IDA flows only) and Gavi (47122). ` +
+    (D.meta.health_sectors
+      ? `World Bank IDA is limited to health sectors (OECD DAC codes ${D.meta.health_sectors.join(", ")}); ` +
+        `multi-sector projects count only their health share. `
+      : "") +
     `Data built ${esc(D.meta.built)}.</p>` +
     `<p>Countries are grouped by their ${esc(D.meta.classification)} income classification for every year, ` +
     `not the classification at the time of disbursement. ` +
@@ -267,7 +281,7 @@
       const traces = D.funders.map(f => ({
         x: years, y: series(f, g), name: f, type: "scatter", mode: "lines+markers",
         line: { color: COLORS[f], width: 2.5 }, marker: { size: 5 },
-        hovertemplate: "%{customdata}<extra>" + f + "</extra>",
+        hovertemplate: "%{customdata}<extra>" + esc(label(f)) + "</extra>",
         customdata: series(f, g).map(fmt)
       }));
       const layout = baseLayout();
@@ -286,7 +300,7 @@
       '<th class="num">Total</th></tr></thead><tbody>';
     D.funders.forEach(f => {
       const vals = D.income_groups.map(g => series(f, g).reduce((a, b) => a + b, 0));
-      html += `<tr><td><span class="swatch" style="background:${COLORS[f]}"></span>${esc(f)}</td>` +
+      html += `<tr><td><span class="swatch" style="background:${COLORS[f]}"></span>${esc(label(f))}</td>` +
         vals.map(v => `<td class="num">${fmt(v)}</td>`).join("") +
         `<td class="num"><strong>${fmt(vals.reduce((a, b) => a + b, 0))}</strong></td></tr>`;
     });
@@ -422,7 +436,7 @@
   function renderCountry() {
     const iso2 = countrySel.value, funder = funderSel.value;
     const info = countryInfo[iso2] || { name: iso2, group: "" };
-    const funderLabel = funder === "all" ? "all three funders" : funder;
+    const funderLabel = funder === "all" ? "all three funders" : label(funder);
     const rows = (rowsByCountry[iso2] || []).filter(r => funder === "all" || r[1] === funder);
 
     // Aggregate by activity
@@ -496,7 +510,7 @@
       html += `<tr><td><span class="swatch" style="background:${sw}"></span>${esc(D.activities[a.id] || a.id)}</td>` +
         `<td class="id"><a href="https://d-portal.org/ctrack.html#view=act&aid=${encodeURIComponent(a.id)}" ` +
         `target="_blank" rel="noopener">${esc(a.id)}</a></td>` +
-        (showFunder ? `<td>${esc(a.funder)}</td>` : "") +
+        (showFunder ? `<td>${esc(label(a.funder))}</td>` : "") +
         `<td class="num">${a.first === a.last ? a.first : a.first + "–" + a.last}</td>` +
         `<td class="num">${fmt(a.total)}</td></tr>`;
     });

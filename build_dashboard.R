@@ -24,6 +24,13 @@ library(tidyr)
 library(purrr)
 
 start_year <- 2015
+
+# Health sectors (OECD DAC purpose codes, matched on the first three digits):
+#   121 Health, general   122 Basic health (incl. malaria, TB, COVID-19)
+#   123 Non-communicable diseases   130 Population policies and reproductive
+#   health (incl. STD/HIV control). Remove "130" for a narrower definition.
+health_sectors        <- c("121", "122", "123", "130")
+health_filter_funders <- c("World Bank IDA")   # funders limited to health sectors
 weo_file   <- "WEOApr2026all.xlsx"
 weo_label  <- "IMF World Economic Outlook, April 2026"
 weo_to     <- 2028   # show IMF projections up to this year
@@ -69,6 +76,30 @@ message("Disbursements: ", nrow(disb),
 
 disb <- disb |>
   filter(!is.na(usd), !multi_country, !is.na(income_group))
+
+# ---- Keep only health-sector disbursements for the funders listed above ------
+# d-portal splits each transaction across its sectors by percentage, so a
+# multi-sector project keeps only its health share.
+
+if (!"sector_code" %in% names(disb)) stop("No sector_code column; rerun iati_dportal.R")
+
+disb <- disb |> mutate(health = substr(sector_code, 1, 3) %in% health_sectors)
+
+sector_check <- disb |>
+  group_by(funder) |>
+  summarise(total_bn       = round(sum(usd) / 1e9, 1),
+            health_share   = round(100 * sum(usd[health]) / sum(usd), 1),
+            no_sector_share = round(100 * sum(usd[is.na(sector_code)]) / sum(usd), 1),
+            .groups = "drop")
+print(sector_check)
+
+ida_health <- sector_check$health_share[sector_check$funder %in% health_filter_funders]
+if (length(ida_health) && any(ida_health == 0)) {
+  stop("No health-sector disbursements found for ", paste(health_filter_funders, collapse = ", "),
+       "; check the sector codes (sector_code column) before filtering")
+}
+
+disb <- disb |> filter(!funder %in% health_filter_funders | health)
 
 # ---- Tab 1: funder x income group x year ---------------------------------------
 
@@ -197,7 +228,14 @@ dash <- list(
     start_year     = start_year,
     end_year       = max(disb$year),
     dropped_non_usd = n_non_usd,
-    excluded_multi  = n_multi
+    excluded_multi  = n_multi,
+    health_sectors  = health_sectors,
+    # Display names: funders filtered to health sectors are labelled as such
+    funder_labels   = as.list(setNames(
+      ifelse(c("Global Fund", "World Bank IDA", "Gavi") %in% health_filter_funders,
+             paste(c("Global Fund", "World Bank IDA", "Gavi"), "(health)"),
+             c("Global Fund", "World Bank IDA", "Gavi")),
+      c("Global Fund", "World Bank IDA", "Gavi")))
   ),
   funders      = c("Global Fund", "World Bank IDA", "Gavi"),
   income_groups = c("Low income", "Lower middle income", "Upper middle income"),
