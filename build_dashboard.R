@@ -123,7 +123,7 @@ activities <- disb |>
 
 country_meta <- countries |>
   filter(iso2 %in% country_rows$country_iso2) |>
-  select(iso2, country, income_group) |>
+  select(iso2, country, income_group, iso3) |>
   arrange(country)
 
 
@@ -240,7 +240,7 @@ dash <- list(
   funders      = c("Global Fund", "World Bank IDA", "Gavi"),
   income_groups = c("Low income", "Lower middle income", "Upper middle income"),
   income       = income,                     # [funder, income_group, year, usd]
-  countries    = country_meta,               # [iso2, country, income_group]
+  countries    = country_meta,               # [iso2, country, income_group, iso3]
   rows         = country_rows,               # [iso2, funder, activity_id, year, usd]
   activities   = as.list(setNames(activities$title, activities$iati_identifier)),
   context      = list(

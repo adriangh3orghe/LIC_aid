@@ -75,8 +75,14 @@
   td.id a { color: var(--ida); font-size: .85rem; word-break: break-all; }
   .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 8px; vertical-align: baseline; }
 
-  .country-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; margin: 4px 0 6px; }
+  .country-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+                  gap: 12px 24px; margin: 4px 0 6px; }
+  .country-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; }
+  .country-name { display: flex; align-items: center; gap: 12px; }
+  .flag { width: 44px; height: 33px; border-radius: 3px; flex: none; object-fit: cover;
+          box-shadow: 0 0 0 1px rgba(27, 37, 51, .15); align-self: center; }
   .country-head h2 { font-size: 1.6rem; margin: 0; }
+  .locator { width: 260px; height: 132px; }
   .country-head .tag { color: var(--muted); }
   .country-head .big { font-size: 1.15rem; font-weight: 600; }
   .chart-lg { height: 440px; }
@@ -108,6 +114,7 @@
   @media (max-width: 860px) {
     .panels { grid-template-columns: 1fr; }
     .ctx-groups, .ctx-health { grid-template-columns: 1fr; }
+    .locator { width: 160px; height: 82px; }
     select { min-width: 0; width: 100%; }
     label.field { flex: 1 1 100%; }
   }
@@ -416,11 +423,43 @@
     }
   }
 
+  // ---------- Country flag and locator map ----------
+  const FLAG_URL = "https://cdn.jsdelivr.net/npm/flag-icons@7.2.3/flags/4x3/";
+  // Countries missing from Plotly's world map; marked by coordinates instead
+  const MAP_POINTS = { XKX: [20.9, 42.6], TUV: [179.2, -8.5] };
+
+  function renderLocator(iso3, name) {
+    const el = document.getElementById("country-map");
+    if (!el) return;
+    if (!iso3 || typeof Plotly === "undefined") { el.hidden = true; return; }
+    el.hidden = false;
+    el.setAttribute("aria-label", `World map with ${name} highlighted`);
+    const pt = MAP_POINTS[iso3];
+    const traces = [
+      { type: "choropleth", locationmode: "ISO-3", locations: [iso3], z: [1],
+        colorscale: [[0, "#1B2533"], [1, "#1B2533"]], showscale: false,
+        marker: { line: { color: "#1B2533", width: 0.5 } }, hoverinfo: "skip" },
+      // Ring around the country so small states stay visible
+      Object.assign(pt ? { lon: [pt[0]], lat: [pt[1]] } : { locationmode: "ISO-3", locations: [iso3] },
+        { type: "scattergeo", mode: "markers", hoverinfo: "skip",
+          marker: { size: 14, color: "rgba(0,0,0,0)", line: { color: "#1B2533", width: 2 } } })
+    ];
+    const layout = {
+      margin: { l: 0, r: 0, t: 0, b: 0 }, paper_bgcolor: "rgba(0,0,0,0)", showlegend: false,
+      geo: { projection: { type: "natural earth" }, resolution: 50,
+             lataxis: { range: [-56, 84] }, lonaxis: { range: [-180, 180] },
+             showframe: false, showcoastlines: false, showcountries: true,
+             countrycolor: "#FFFFFF", countrywidth: 0.3,
+             showland: true, landcolor: "#D3D9E1", showocean: false, bgcolor: "rgba(0,0,0,0)" }
+    };
+    Plotly.react(el, traces, layout, { staticPlot: true, responsive: true });
+  }
+
   // ---------- Tab 2: country ----------
   const rowsByCountry = {};
   D.rows.forEach(r => { (rowsByCountry[r[0]] = rowsByCountry[r[0]] || []).push(r); });
   const countryInfo = {};
-  D.countries.forEach(([iso2, name, group]) => { countryInfo[iso2] = { name, group }; });
+  D.countries.forEach(([iso2, name, group, iso3]) => { countryInfo[iso2] = { name, group, iso3 }; });
 
   const countrySel = document.getElementById("country-select");
   const funderSel = document.getElementById("funder-select");
@@ -450,8 +489,12 @@
     const total = list.reduce((s, a) => s + a.total, 0);
 
     document.getElementById("country-head").innerHTML =
-      `<h2>${esc(info.name)}</h2><span class="tag">${esc(info.group)}</span>` +
-      `<span class="big">${fmt(total)} from ${esc(funderLabel)} since ${D.meta.start_year}</span>`;
+      `<div class="country-title"><div class="country-name">` +
+      `<img class="flag" src="${FLAG_URL}${esc(iso2.toLowerCase())}.svg" alt="" onerror="this.remove()">` +
+      `<h2>${esc(info.name)}</h2></div><span class="tag">${esc(info.group)}</span>` +
+      `<span class="big">${fmt(total)} from ${esc(funderLabel)} since ${D.meta.start_year}</span></div>` +
+      `<div class="locator" id="country-map" role="img"></div>`;
+    renderLocator(info.iso3, info.name);
 
     const body = document.getElementById("country-body");
     const actsEl = document.getElementById("country-activities");
