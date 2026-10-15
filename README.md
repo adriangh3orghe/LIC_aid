@@ -36,6 +36,7 @@ Interactive dashboard of disbursements from the **Global Fund**, **World Bank ID
 iati_dportal.R       Download IATI disbursements from d-portal (no API key needed)
 build_dashboard.R    Aggregate data, add country indicators, write docs/data.js
 compare_sources.R    Compare total health aid in IATI, CRS and IHME, write docs/sources.js
+lic_share_2023.R     Share of 2023 health aid going to low-income countries, by channel and source
 refresh.R            Full update: clear cache, download, rebuild, push
 docs/index.html      Dashboard page (served by GitHub Pages)
 docs/data.js         Dashboard data (generated)
