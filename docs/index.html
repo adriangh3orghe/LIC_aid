@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <script src="data.js"></script>
+<script src="sources.js"></script>
 <style>
   :root {
     --ink: #1B2533;
@@ -20,6 +21,11 @@
     --gf: #C8283E;
     --ida: #1F5FA8;
     --gavi: #0B8F80;
+    /* Data sources (comparison sections) */
+    --src-iati: #6250D6;
+    --src-crs: #EB6834;
+    --src-ihme: #1BAF7A;
+    --src-ghed: #52514E;
     --font: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
@@ -108,12 +114,43 @@
   .ctx-note { color: var(--muted); font-size: .82rem; margin: 16px 0 0; max-width: 90ch; }
   .ctx-note .dash { display: inline-block; width: 18px; border-top: 2px dashed var(--muted); vertical-align: middle; margin: 0 4px; }
 
+  /* Data-source comparison */
+  .src-block { border: 1px solid var(--rule); border-radius: 12px; padding: 20px 20px 16px; margin: 0 0 36px; }
+  .src-block > h2 { font-size: 1.2rem; margin: 0 0 4px; }
+  .src-block .sub { color: var(--muted); margin: 0 0 14px; max-width: 80ch; font-size: .95rem; }
+  .src-key { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0 0 12px; padding: 0; list-style: none; font-size: .9rem; }
+  .src-key li { display: flex; align-items: center; gap: 8px; }
+  .src-key i { width: 22px; height: 0; border-top: 2px solid; display: inline-block; }
+  .src-key i.dashed { border-top-style: dashed; }
+  .src-panels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .src-panels .panel { padding-bottom: 4px; }
+  .chart-src { height: 240px; }
+  .chart-src-lg { height: 300px; }
+  .verdict { background: var(--panel); border-radius: 10px; padding: 14px 16px; margin: 18px 0 0; }
+  .verdict h3 { margin: 0 0 6px; font-size: 1rem; }
+  .verdict p { margin: 0 0 6px; max-width: 90ch; }
+  #src-table td:first-child { white-space: nowrap; }
+  .src-table-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 8px 16px; margin: 18px 0 6px; }
+  .src-table-head h3 { margin: 0; }
+  .src-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 14px 0 0; }
+  .src-stat { border-left: 3px solid; padding: 2px 0 2px 10px; }
+  .src-stat b { display: block; font-size: 1.05rem; }
+  .src-stat span { color: var(--muted); font-size: .85rem; }
+  details.src-notes { margin: 14px 0 0; font-size: .88rem; color: var(--muted); }
+  details.src-notes summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+  details.src-notes ul { margin: 8px 0 0; padding-left: 20px; max-width: 95ch; }
+  details.src-notes li { margin-bottom: 4px; }
+  .toolbar.sub-toolbar { margin-top: 4px; }
+
   footer { border-top: 1px solid var(--rule); padding: 20px 0 40px; color: var(--muted); font-size: .85rem; }
   footer p { max-width: 90ch; margin: 0 0 6px; }
 
   @media (max-width: 860px) {
     .panels { grid-template-columns: 1fr; }
     .ctx-groups, .ctx-health { grid-template-columns: 1fr; }
+    .src-panels { grid-template-columns: 1fr; }
+    .src-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .src-block { padding: 16px 12px 12px; }
     .locator { width: 160px; height: 82px; }
     select { min-width: 0; width: 100%; }
     label.field { flex: 1 1 100%; }
@@ -138,6 +175,7 @@
   </nav>
 
   <section role="tabpanel" id="panel-income" aria-labelledby="tab-income">
+    <section class="src-block" id="src-income" aria-labelledby="src-income-title"></section>
     <div class="toolbar">
       <label class="switch"><input type="checkbox" id="shared-scale" checked> Same scale on all three charts</label>
     </div>
@@ -151,6 +189,10 @@
       <label class="field">Country
         <select id="country-select"></select>
       </label>
+    </div>
+    <div class="country-head" id="country-head"></div>
+    <section class="src-block" id="src-country" aria-labelledby="src-country-title"></section>
+    <div class="toolbar sub-toolbar">
       <label class="field">Funder
         <select id="funder-select">
           <option value="Global Fund">Global Fund</option>
@@ -160,7 +202,6 @@
         </select>
       </label>
     </div>
-    <div class="country-head" id="country-head"></div>
     <div id="country-body"></div>
     <section class="context" id="country-context" aria-labelledby="ctx-title"></section>
     <div id="country-activities"></div>
@@ -279,6 +320,7 @@
   });
 
   function renderIncome() {
+    renderSourcesIncome();
     const shared = document.getElementById("shared-scale").checked;
     let maxY = 0;
     D.income_groups.forEach(g => D.funders.forEach(f => {
@@ -455,6 +497,210 @@
     Plotly.react(el, traces, layout, { staticPlot: true, responsive: true });
   }
 
+  // ---------- Data-source comparison (docs/sources.js, from compare_sources.R) ----------
+  const S = window.SOURCES || null;
+  if (S) ["overlap_years", "ihme_prelim_years", "health_groups", "ihme_dropped_channels", "ihme_dropped_sources"]
+    .forEach(k => { S.meta[k] = [].concat(S.meta[k] ?? []); });
+  const SRC = [
+    { key: "iati", i: 1, label: "IATI (d-portal)", short: "IATI", color: "#6250D6" },
+    { key: "crs",  i: 2, label: "OECD CRS",        short: "CRS",  color: "#EB6834" },
+    { key: "ihme", i: 3, label: "IHME DAH",        short: "IHME", color: "#1BAF7A" },
+    { key: "ghed", i: 4, label: "WHO external health spending (reference)", short: "WHO", color: "#52514E", dash: true }
+  ];
+  const CAND = SRC.slice(0, 3);
+  const srcName = k => SRC.find(s => s.key === k).label;
+  const span = ys => ys.length ? (ys[0] === ys[ys.length - 1] ? ys[0] : ys[0] + "–" + ys[ys.length - 1]) : "";
+  const SRC_ALL = "All low and middle income";
+
+  const srcKeyHtml = () => '<ul class="src-key">' + SRC.map(s =>
+    `<li><i class="${s.dash ? "dashed" : ""}" style="border-top-color:${s.color}"></i>${esc(s.label)}</li>`).join("") + "</ul>";
+
+  const srcNotesHtml = () => {
+    const m = S.meta;
+    return `<details class="src-notes"><summary>About the sources and method</summary><ul>` +
+      `<li><b>IATI (d-portal):</b> disbursements from every IATI publisher to each country in DAC sectors ` +
+      `${m.health_groups.join(", ")} (health and population/reproductive health), split by each activity's ` +
+      `country and sector percentages. Up to date, but reporting is voluntary and uneven, and money can be counted ` +
+      `twice when a funder and the organisation implementing for it both publish. ` +
+      (m.iati_ibrd_adjusted
+        ? `World Bank IBRD lending (flow type 20), which the CRS and IHME leave out, is taken out` +
+          (m.iati_ibrd_share && m.iati_ibrd_share[SRC_ALL] != null
+            ? `: ${m.iati_ibrd_share[SRC_ALL]}% of the IATI total for low and middle income countries` +
+              (m.iati_ibrd_share["Upper middle income"] != null ? `, ${m.iati_ibrd_share["Upper middle income"]}% for upper-middle income` : "")
+            : "") + `.`
+        : m.iati_ibrd_adjusted === false ? `IATI still includes World Bank IBRD lending, which the CRS and IHME leave out.` : "") +
+      `</li>` +
+      `<li><b>OECD CRS:</b> health disbursements (purpose codes 121, 122, 123 and 130) reported by DAC members, ` +
+      `multilaterals and some foundations; ODA and private development finance, excluding other official flows. ` +
+      `Consistent definitions; published one to two years after the fact.</li>` +
+      `<li><b>IHME DAH:</b> development assistance for health from all sources, including private, with transfers ` +
+      `between channels removed to avoid double counting${m.ihme_dropped_channels.length ? "; " +
+      esc(m.ihme_dropped_channels.join(", ").replace("WB_IBRD", "World Bank IBRD")) + " left out to match the aid definition" : ""}. ` +
+      (m.ihme_dropped_sources.length
+        ? `To match the CRS, which does not cover them, private sources other than Gates (NGOs' own fundraising ` +
+          `and corporate donations) are left out` +
+          (m.ihme_dropped_share && m.ihme_dropped_share[SRC_ALL] != null
+            ? `, ${m.ihme_dropped_share[SRC_ALL]}% of IHME's total for low and middle income countries` : "") +
+          `; public money passed through NGOs is kept. IHME's "Other" source is kept. `
+        : "") +
+      `${m.ihme_prelim_years.length ? span(m.ihme_prelim_years) + " figures are preliminary estimates." : ""}</li>` +
+      `<li><b>WHO external health spending</b> (Global Health Expenditure Database): money from abroad recorded in ` +
+      `each country's health accounts. Not a measure of aid disbursements, but an independent, recipient-side check.</li>` +
+      `<li>All values are in constant ${m.base_year} US dollars: current-dollar figures (IATI, CRS, WHO) are deflated ` +
+      `with the ${esc(m.deflator)}, and IHME's constant ${m.ihme_price_year} dollars are rebased with the same series. ` +
+      `Agreement is measured over ${span(m.overlap_years)}, the years all three sources cover with final data, on ` +
+      `country-years where both sources report. Income groups use the World Bank ${esc(m.classification)} classification for every year.</li>` +
+      `</ul></details>`;
+  };
+
+  const srcEmptyHtml = (id, title) =>
+    `<h2 id="${id}">${title}</h2><p class="sub">This comparison has not been built yet. Run ` +
+    `<code>compare_sources.R</code> in R (it reads <code>CRS.parquet</code> and the IHME DAH folder from ` +
+    `Downloads), then commit <code>docs/sources.js</code>.</p>`;
+
+  // rows: [[year, iati, crs, ihme, ghed], ...] in USD millions
+  function plotSources(el, rows, height) {
+    const xs = rows.map(r => r[0]);
+    const traces = [], ann = [];
+    SRC.forEach(s => {
+      const ys = rows.map(r => r[s.i] == null ? null : r[s.i] * 1e6);
+      if (!ys.some(v => v != null)) return;
+      traces.push({ x: xs, y: ys, type: "scatter", mode: "lines", name: s.label, connectgaps: false,
+        line: { color: s.color, width: 2, dash: s.dash ? "dash" : "solid" },
+        customdata: ys.map(v => v == null ? "" : fmt(v)),
+        hovertemplate: "%{customdata}<extra>" + esc(s.short) + "</extra>" });
+      const last = ys.reduce((k, v, j) => v == null ? k : j, -1);
+      ann.push({ x: xs[last], y: ys[last], text: s.short, showarrow: false, xanchor: "left", xshift: 5,
+                 font: { size: 11, color: "#5B6676" } });
+    });
+    // Keep end labels apart: at least ~9% of the value range between them
+    const yMax = Math.max(0, ...traces.flatMap(t => t.y.filter(v => v != null)));
+    const gap = yMax * 0.09;
+    ann.sort((a, b) => a.y - b.y).forEach((a, j) => {
+      if (j && a.y - ann[j - 1].y < gap) a.y = ann[j - 1].y + gap;
+    });
+    const layout = baseLayout();
+    layout.margin.r = 40;
+    layout.yaxis.rangemode = "tozero";
+    layout.xaxis.tickvals = xs.filter(y => y % 2 === 1);
+    layout.annotations = ann;
+    el.style.height = height + "px";
+    Plotly.react(el, traces, layout, plotConfig);
+  }
+
+  function srcVerdict(g) {
+    const m = S.metrics[g];
+    if (!m) return "";
+    const yrs = span(S.meta.overlap_years), grp = g === SRC_ALL ? "low and middle income" : g.toLowerCase();
+    const cons = CAND.map(s => [s.key, m.consistency[s.key]]).filter(x => x[1] != null).sort((a, b) => a[1] - b[1]);
+    const who = CAND.map(s => [s.key, (m.pairs[s.key].ghed || {}).within25]).filter(x => x[1] != null).sort((a, b) => b[1] - a[1]);
+    if (!cons.length) return "";
+    const best = cons[0][0];
+    let html = `<p>Over ${yrs}, <b>${esc(srcName(best))}</b> agrees most closely with the other two sources for ` +
+      `${esc(grp)} countries: its country-year totals differ from theirs by a median of ${cons[0][1]}%, against ` +
+      cons.slice(1).map(c => `${c[1]}% for ${esc(srcName(c[0]))}`).join(" and ") + ".</p>";
+    if (who.length) {
+      html += `<p>Against WHO external health spending, recorded by the countries themselves, <b>${esc(srcName(who[0][0]))}</b> ` +
+        `is closest: within 25% in ${who[0][1]}% of country-years, against ` +
+        who.slice(1).map(c => `${c[1]}% for ${esc(srcName(c[0]))}`).join(" and ") + ".</p>";
+      html += who[0][0] === best
+        ? `<p>On both tests, ${esc(srcName(best))} is the most reliable of the three for comparing total health aid across ${esc(grp)} countries.</p>`
+        : `<p>The two tests point to different sources, so treat country rankings with care and check large gaps against both.</p>`;
+    }
+    const cov = S.meta.coverage, prelim = S.meta.ihme_prelim_years;
+    let ihmeFinal = cov.ihme[1];
+    while (prelim.includes(ihmeFinal) && ihmeFinal > cov.ihme[0]) ihmeFinal--;
+    html += `<p>Latest year with data: IATI ${cov.iati[1]}, CRS ${cov.crs[1]}, IHME ${ihmeFinal}` +
+      (prelim.length ? ` (${span(prelim)} preliminary)` : "") + `, WHO ${cov.ghed[1]}.</p>`;
+    return html;
+  }
+
+  function srcTable(g) {
+    const m = S.metrics[g];
+    if (!m) return "";
+    const pct = v => v == null ? "–" : v + "%";
+    let html = '<thead><tr><th>Source</th><th class="num">Countries</th>' +
+      '<th class="num">Median gap to the other two</th><th class="num">Within 25% of WHO external spending</th>' +
+      '<th class="num">Total, relative to CRS</th><th class="num">Latest year</th></tr></thead><tbody>';
+    CAND.forEach(s => {
+      const p = m.pairs[s.key];
+      const vsCrs = s.key === "crs" ? "–" : (p.crs && p.crs.ratio != null ? Math.round(p.crs.ratio * 100) + "%" : "–");
+      html += `<tr><td><span class="swatch" style="background:${s.color}"></span>${esc(s.label)}</td>` +
+        `<td class="num">${m.countries[s.key]}</td><td class="num">${pct(m.consistency[s.key])}</td>` +
+        `<td class="num">${pct((p.ghed || {}).within25)}</td><td class="num">${vsCrs}</td>` +
+        `<td class="num">${S.meta.coverage[s.key][1]}</td></tr>`;
+    });
+    return html + "</tbody>";
+  }
+
+  let srcIncomeBuilt = false;
+  function renderSourcesIncome() {
+    const el = document.getElementById("src-income");
+    const title = "Total health aid by data source";
+    if (!S) { el.innerHTML = srcEmptyHtml("src-income-title", title); return; }
+    if (!srcIncomeBuilt) {
+      const groups = Object.keys(S.metrics);
+      el.innerHTML =
+        `<h2 id="src-income-title">${title}</h2>` +
+        `<p class="sub">Health aid disbursements to each income group as recorded by IATI, the OECD CRS and IHME, ` +
+        `in constant ${S.meta.base_year} US dollars. Each line stops where that source's data run out.</p>` +
+        srcKeyHtml() +
+        '<div class="src-panels">' + D.income_groups.map((g, i) =>
+          `<div class="panel"><h2>${esc(g)}</h2><div class="chart-src" id="src-chart-${i}" role="img" ` +
+          `aria-label="Health aid to ${esc(g)} countries by data source and year"></div></div>`).join("") + "</div>" +
+        '<div class="src-table-head"><h3>Which source is most reliable?</h3>' +
+        '<label class="field">Income group<select id="src-group">' +
+        groups.map(g => `<option${g === "Low income" ? " selected" : ""}>${esc(g)}</option>`).join("") +
+        "</select></label></div>" +
+        '<div class="verdict" id="src-verdict"></div>' +
+        '<div class="table-scroll"><table id="src-table"></table></div>' + srcNotesHtml();
+      const sel = document.getElementById("src-group");
+      const upd = () => {
+        document.getElementById("src-verdict").innerHTML = srcVerdict(sel.value);
+        document.getElementById("src-table").innerHTML = srcTable(sel.value);
+      };
+      sel.addEventListener("change", upd);
+      upd();
+      srcIncomeBuilt = true;
+    }
+    D.income_groups.forEach((g, i) => {
+      const rows = S.groups[g];
+      if (rows) plotSources(document.getElementById(`src-chart-${i}`), rows, 240);
+    });
+  }
+
+  function renderSourcesCountry(iso2, name) {
+    const el = document.getElementById("src-country");
+    const title = `Health aid to ${esc(name)} by data source`;
+    if (!S) { el.innerHTML = srcEmptyHtml("src-country-title", title); return; }
+    const rows = S.countries[iso2];
+    if (!rows) {
+      el.innerHTML = `<h2 id="src-country-title">${title}</h2><p class="sub">None of the sources records health aid to ${esc(name)}.</p>`;
+      return;
+    }
+    // Totals over the comparison years, for the sources that report them
+    const yrs = S.meta.overlap_years;
+    const tot = {};
+    SRC.forEach(s => {
+      const v = rows.filter(r => yrs.includes(r[0]) && r[s.i] != null).map(r => r[s.i]);
+      tot[s.key] = v.length ? v.reduce((a, b) => a + b, 0) * 1e6 : null;
+    });
+    const stats = SRC.map(s => {
+      const rel = s.key !== "crs" && tot[s.key] != null && tot.crs ? `, ${Math.round(tot[s.key] / tot.crs * 100)}% of CRS` : "";
+      return `<div class="src-stat" style="border-left-color:${s.color}"><b>${tot[s.key] == null ? "No data" : fmt(tot[s.key])}</b>` +
+        `<span>${esc(s.short)}, ${span(yrs)}${rel}</span></div>`;
+    }).join("");
+    el.innerHTML =
+      `<h2 id="src-country-title">${title}</h2>` +
+      `<p class="sub">Health aid disbursements to ${esc(name)} in IATI, the OECD CRS and IHME, in constant ` +
+      `${S.meta.base_year} US dollars, with WHO external health spending as a reference. ` +
+      `For which source to rely on across countries, see the By income group tab.</p>` +
+      srcKeyHtml() +
+      `<div class="chart-src-lg" id="src-country-chart" role="img" aria-label="Health aid to ${esc(name)} by data source and year"></div>` +
+      `<div class="src-stats">${stats}</div>` + srcNotesHtml();
+    plotSources(document.getElementById("src-country-chart"), rows, 300);
+  }
+
   // ---------- Tab 2: country ----------
   const rowsByCountry = {};
   D.rows.forEach(r => { (rowsByCountry[r[0]] = rowsByCountry[r[0]] || []).push(r); });
@@ -495,6 +741,7 @@
       `<span class="big">${fmt(total)} from ${esc(funderLabel)} since ${D.meta.start_year}</span></div>` +
       `<div class="locator" id="country-map" role="img"></div>`;
     renderLocator(info.iso3, info.name);
+    renderSourcesCountry(iso2, info.name);
 
     const body = document.getElementById("country-body");
     const actsEl = document.getElementById("country-activities");
