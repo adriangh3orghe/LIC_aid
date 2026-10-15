@@ -42,7 +42,7 @@ docs/data.js         Dashboard data (generated)
 docs/sources.js      Data-source comparison (generated)
 ```
 
-Input files not stored in the repository: `OGHIST_*.xlsx` (World Bank) and `WEO*.xlsx` (IMF), placed in the project folder; `CRS.parquet` (OECD) and the `IHME_DAH_DATABASE_1990-2026` folder (IHME), in your Downloads folder. Downloads are cached in `data/` (git-ignored).
+Input files not stored in the repository: `OGHIST_*.xlsx` (World Bank) and `WEO*.xlsx` (IMF), placed in the project folder; `CRS.parquet` (OECD) and the `IHME_DAH_DATABASE_1990_2026` folder (IHME), in your Downloads folder. Downloads are cached in `data/` (git-ignored).
 
 ## Updating
 

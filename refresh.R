@@ -10,7 +10,7 @@
 #       -> weo_file and weo_label at the top of build_dashboard.R, and weo_file
 #          at the top of compare_sources.R
 #   - OECD CRS bulk file (Downloads/CRS.parquet) and IHME DAH database
-#       (Downloads/IHME_DAH_DATABASE_1990-2026): update the paths at the top
+#       (Downloads/IHME_DAH_DATABASE_1990_2026): update the paths at the top
 #       of compare_sources.R when a new release has a different name
 
 started <- Sys.time()

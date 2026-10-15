@@ -16,7 +16,7 @@
 #   IATI   d-portal, all publishers, disbursements to each country, DAC sector
 #          categories 120 (121, 122, 123) and 130, downloaded here
 #   CRS    Downloads/CRS.parquet (OECD CRS bulk file, USD millions)
-#   IHME   Downloads/IHME_DAH_DATABASE_1990-2026/ (CSV, thousands of USD in
+#   IHME   Downloads/IHME_DAH_DATABASE_1990_2026/ (CSV, thousands of USD in
 #          constant prices of the year in the value column name, e.g. dah_23)
 #   WHO    External health spending (GHED, via World Bank WDI), as an
 #          independent, recipient-side benchmark rather than a candidate
@@ -39,7 +39,7 @@ years      <- 2015:2026
 # Downloads folder: USERPROFILE on Windows (R's "~" there is Documents)
 downloads  <- file.path(Sys.getenv("USERPROFILE", unset = path.expand("~")), "Downloads")
 crs_file   <- file.path(downloads, "CRS.parquet")
-ihme_dir   <- file.path(downloads, "IHME_DAH_DATABASE_1990-2026")
+ihme_dir   <- file.path(downloads, "IHME_DAH_DATABASE_1990_2026")
 weo_file   <- "WEOApr2026all.xlsx"     # same file as build_dashboard.R
 
 # Health: DAC sector categories 121, 122, 123 (together "120 Health") and
