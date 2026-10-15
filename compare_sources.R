@@ -168,6 +168,41 @@ iati <- map(years[file.exists(iati_cache(years))], \(y)
   summarise(iati = sum(usd, na.rm = TRUE) / 1e6, .groups = "drop")   # USD millions, current
 message("IATI: ", n_distinct(iati$iso3), " countries, ", min(iati$year), "-", max(iati$year))
 
+# Take out World Bank IBRD lending, which the CRS (other official flows) and
+# IHME (channel dropped above) leave out. d-portal's totals can't separate it,
+# so it comes from the World Bank transactions saved by iati_dportal.R, where
+# IBRD loans carry flow type 20 (IDA is 10). Same health sectors, by the
+# transaction's country and sector split. If that file is missing, IATI is
+# left as is and the page says so.
+wb_file <- "data/raw/dportal_trans_world_bank.csv"
+iati_ibrd_adjusted <- file.exists(wb_file)
+if (iati_ibrd_adjusted) {
+  wb <- read_csv(wb_file, col_types = cols(.default = "c"))
+  day <- as.numeric(wb$trans_day)
+  if (isTRUE(max(abs(day), na.rm = TRUE) > 1e6)) day <- day / 86400   # seconds, not days
+  message("World Bank flow types in IATI: ",
+          paste(names(table(wb$trans_flow_code, useNA = "ifany")), collapse = ", "))
+  ibrd <- wb |>
+    mutate(year = as.integer(format(as.Date(day, origin = "1970-01-01"), "%Y")),
+           usd = as.numeric(trans_usd)) |>
+    filter(trans_flow_code == "20", year %in% years,
+           substr(trans_sector, 1, 3) %in% health_groups) |>
+    inner_join(countries, by = c("trans_country" = "iso2")) |>
+    group_by(iso3, year) |>
+    summarise(ibrd = sum(usd, na.rm = TRUE) / 1e6, .groups = "drop")
+  iati <- iati |>
+    left_join(ibrd, by = c("iso3", "year")) |>
+    mutate(ibrd = coalesce(ibrd, 0),
+           iati_with_ibrd = iati,
+           iati = pmax(iati - ibrd, 0)) |>     # never below zero
+    select(iso3, year, iati, iati_with_ibrd)
+  message(sprintf("IATI: removed $%.1fbn of IBRD health lending (current dollars, %d-%d)",
+                  sum(ibrd$ibrd) / 1e3, min(years), max(years)))
+} else {
+  warning(wb_file, " not found (run iati_dportal.R); IATI includes IBRD lending")
+  iati <- mutate(iati, iati_with_ibrd = iati)
+}
+
 # ---- 2. CRS: health ODA disbursements by recipient -----------------------------
 # Columns as in the OECD bulk file: year, de_recipientcode (ISO3; regional
 # rows end in "_X"), flow_code, purpose_code, usd_disbursement (USD millions, current)
@@ -273,6 +308,7 @@ panel <- countries |>
   left_join(ghed, by = c("iso3", "year")) |>
   mutate(
     iati = to_base(iati, year),
+    iati_with_ibrd = to_base(iati_with_ibrd, year),
     crs  = to_base(crs, year),
     ghed = to_base(ghed, year),
     # IHME: constant ihme_price_year dollars -> constant base_year dollars
@@ -330,6 +366,12 @@ metrics <- map(set_names(groups), \(g) {
 })
 
 # Share of IHME's full total removed by the source filter, comparison years
+# Share of IATI's total removed as IBRD lending, comparison years
+iati_ibrd_share <- map(set_names(groups), \(g) {
+  d <- filter(in_group(g), year %in% overlap_years)
+  round(100 * (1 - sum(d$iati, na.rm = TRUE) / sum(d$iati_with_ibrd, na.rm = TRUE)), 1)
+})
+
 ihme_dropped_share <- map(set_names(groups), \(g) {
   d <- filter(in_group(g), year %in% overlap_years)
   round(100 * (1 - sum(d$ihme, na.rm = TRUE) / sum(d$ihme_all, na.rm = TRUE)), 1)
@@ -363,6 +405,7 @@ out <- list(
     health_groups = I(health_groups), crs_flows = I(crs_flows),
     ihme_dropped_channels = I(ihme_drop_channels),
     ihme_dropped_sources = I(ihme_drop_sources), ihme_dropped_share = ihme_dropped_share,
+    iati_ibrd_adjusted = iati_ibrd_adjusted, iati_ibrd_share = iati_ibrd_share,
     deflator = paste0("US GDP deflator, ", sub("\\.xlsx$", "", weo_file))
   ),
   countries = by_country,          # iso2: [[year, iati, crs, ihme, ghed], ...] USD millions

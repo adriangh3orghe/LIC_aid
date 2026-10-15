@@ -521,7 +521,15 @@
       `<li><b>IATI (d-portal):</b> disbursements from every IATI publisher to each country in DAC sectors ` +
       `${m.health_groups.join(", ")} (health and population/reproductive health), split by each activity's ` +
       `country and sector percentages. Up to date, but reporting is voluntary and uneven, and money can be counted ` +
-      `twice when a funder and the organisation implementing for it both publish.</li>` +
+      `twice when a funder and the organisation implementing for it both publish. ` +
+      (m.iati_ibrd_adjusted
+        ? `World Bank IBRD lending (flow type 20), which the CRS and IHME leave out, is taken out` +
+          (m.iati_ibrd_share && m.iati_ibrd_share[SRC_ALL] != null
+            ? `: ${m.iati_ibrd_share[SRC_ALL]}% of the IATI total for low and middle income countries` +
+              (m.iati_ibrd_share["Upper middle income"] != null ? `, ${m.iati_ibrd_share["Upper middle income"]}% for upper-middle income` : "")
+            : "") + `.`
+        : m.iati_ibrd_adjusted === false ? `IATI still includes World Bank IBRD lending, which the CRS and IHME leave out.` : "") +
+      `</li>` +
       `<li><b>OECD CRS:</b> health disbursements (purpose codes 121, 122, 123 and 130) reported by DAC members, ` +
       `multilaterals and some foundations; ODA and private development finance, excluding other official flows. ` +
       `Consistent definitions; published one to two years after the fact.</li>` +
