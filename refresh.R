@@ -7,7 +7,11 @@
 #   - World Bank income classifications (OGHIST), published each July
 #       -> oghist_file at the top of iati_dportal.R
 #   - IMF World Economic Outlook, published each April and October
-#       -> weo_file and weo_label at the top of build_dashboard.R
+#       -> weo_file and weo_label at the top of build_dashboard.R, and weo_file
+#          at the top of compare_sources.R
+#   - OECD CRS bulk file (Downloads/CRS.parquet) and IHME DAH database
+#       (Downloads/IHME_DAH_DATABASE_1990-2026): update the paths at the top
+#       of compare_sources.R when a new release has a different name
 
 started <- Sys.time()
 
@@ -24,8 +28,12 @@ source("iati_dportal.R")
 # 3. Rebuild the dashboard data (also downloads fresh WDI indicators)
 source("build_dashboard.R")
 
-# 4. Publish: commit and push the new data to GitHub
-gert::git_add(c("docs/data.js", "docs/index.html"))
+# 4. Compare health aid totals across IATI, CRS and IHME (reads CRS.parquet and
+#    the IHME DAH folder from Downloads; see compare_sources.R)
+source("compare_sources.R")
+
+# 5. Publish: commit and push the new data to GitHub
+gert::git_add(c("docs/data.js", "docs/sources.js", "docs/index.html"))
 if (nrow(subset(gert::git_status(), staged))) {
   gert::git_commit(paste("Refresh dashboard data", format(Sys.Date())))
   gert::git_push()
