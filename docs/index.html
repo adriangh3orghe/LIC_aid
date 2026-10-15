@@ -499,7 +499,7 @@
 
   // ---------- Data-source comparison (docs/sources.js, from compare_sources.R) ----------
   const S = window.SOURCES || null;
-  if (S) ["overlap_years", "ihme_prelim_years", "health_groups", "ihme_dropped_channels"]
+  if (S) ["overlap_years", "ihme_prelim_years", "health_groups", "ihme_dropped_channels", "ihme_dropped_sources"]
     .forEach(k => { S.meta[k] = [].concat(S.meta[k] ?? []); });
   const SRC = [
     { key: "iati", i: 1, label: "IATI (d-portal)", short: "IATI", color: "#6250D6" },
@@ -528,6 +528,13 @@
       `<li><b>IHME DAH:</b> development assistance for health from all sources, including private, with transfers ` +
       `between channels removed to avoid double counting${m.ihme_dropped_channels.length ? "; " +
       esc(m.ihme_dropped_channels.join(", ").replace("WB_IBRD", "World Bank IBRD")) + " left out to match the aid definition" : ""}. ` +
+      (m.ihme_dropped_sources.length
+        ? `To match the CRS, which does not cover them, private sources other than Gates (NGOs' own fundraising ` +
+          `and corporate donations) are left out` +
+          (m.ihme_dropped_share && m.ihme_dropped_share[SRC_ALL] != null
+            ? `, ${m.ihme_dropped_share[SRC_ALL]}% of IHME's total for low and middle income countries` : "") +
+          `; public money passed through NGOs is kept. IHME's "Other" source is kept. `
+        : "") +
       `${m.ihme_prelim_years.length ? span(m.ihme_prelim_years) + " figures are preliminary estimates." : ""}</li>` +
       `<li><b>WHO external health spending</b> (Global Health Expenditure Database): money from abroad recorded in ` +
       `each country's health accounts. Not a measure of aid disbursements, but an independent, recipient-side check.</li>` +

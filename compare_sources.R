@@ -55,6 +55,14 @@ crs_flows <- c(11, 12, 13, 19, 30)
 # on non-concessional terms (OOF in the CRS). Set to character() to keep it.
 ihme_drop_channels <- c("WB_IBRD")
 
+# IHME sources left out to match the CRS, which does not cover NGOs' own
+# private fundraising or corporate giving. Gates (in the CRS), debt repayments
+# (development bank lending, e.g. IDA) and government sources are kept. IHME
+# records funds by the channel that disburses them, so public money passed
+# through NGOs stays in (it shows under the NGO channel, not the NGO source).
+# Set to character() to compare IHME's full total.
+ihme_drop_sources <- c("Private_other", "Corporate_donations")
+
 # Price year for every source. NULL = IHME's price year (no rebasing for IHME).
 base_year <- NULL
 
@@ -194,7 +202,8 @@ message("CRS: ", n_distinct(crs$iso3), " countries, ", min(crs$year), "-", max(c
 # ---- 3. IHME DAH: health aid by recipient ---------------------------------------
 # One row per year x source x channel x recipient. Rows with elim_ch = 1 are
 # transfers between channels, dropped to avoid double counting. prelim_est = 1
-# marks preliminary estimates (recent years), kept but flagged.
+# marks preliminary estimates (recent years), kept but flagged. ihme_all keeps
+# every source, to report how much the source filter removes.
 
 ihme_files <- list.files(ihme_dir, "\\.csv$", ignore.case = TRUE, full.names = TRUE)
 ihme_files <- ihme_files[!grepl("codebook", ihme_files, ignore.case = TRUE)]
@@ -206,7 +215,7 @@ ihme_price_year <- 2000L + as.integer(sub("dah_", "", value_col))
 message("IHME: total DAH column ", value_col, " -> constant ", ihme_price_year, " US dollars")
 
 ihme <- map(ihme_files, \(f) read_csv(f, show_col_types = FALSE,
-  col_select = all_of(c("year", "channel", "recipient_isocode", "elim_ch", "prelim_est", value_col)),
+  col_select = all_of(c("year", "source", "channel", "recipient_isocode", "elim_ch", "prelim_est", value_col)),
   col_types = cols(.default = "c"))) |>
   list_rbind() |>
   mutate(year = as.integer(year), value = as.numeric(.data[[value_col]]),
@@ -214,8 +223,10 @@ ihme <- map(ihme_files, \(f) read_csv(f, show_col_types = FALSE,
   filter(year %in% years, elim != 1, !channel %in% ihme_drop_channels) |>
   semi_join(countries, by = c("recipient_isocode" = "iso3")) |>
   group_by(iso3 = recipient_isocode, year) |>
-  summarise(ihme = sum(value, na.rm = TRUE) / 1e3,                   # USD millions
-            ihme_prelim = sum(value[prelim == 1], na.rm = TRUE) / 1e3, .groups = "drop")
+  mutate(kept = !source %in% ihme_drop_sources) |>
+  summarise(ihme = sum(value[kept], na.rm = TRUE) / 1e3,             # USD millions
+            ihme_all = sum(value, na.rm = TRUE) / 1e3,
+            ihme_prelim = sum(value[kept & prelim == 1], na.rm = TRUE) / 1e3, .groups = "drop")
 message("IHME: ", n_distinct(ihme$iso3), " countries, ", min(ihme$year), "-", max(ihme$year))
 
 # ---- 4. WHO external health spending (benchmark) ---------------------------------
@@ -265,7 +276,7 @@ panel <- countries |>
     crs  = to_base(crs, year),
     ghed = to_base(ghed, year),
     # IHME: constant ihme_price_year dollars -> constant base_year dollars
-    across(c(ihme, ihme_prelim), \(v) v * d_at(base_year) / d_at(ihme_price_year))
+    across(c(ihme, ihme_all, ihme_prelim), \(v) v * d_at(base_year) / d_at(ihme_price_year))
   )
 
 # A source "covers" a year once it reports for at least half the countries it
@@ -318,6 +329,12 @@ metrics <- map(set_names(groups), \(g) {
        countries = map(set_names(cand), \(a) n_distinct(d$iso3[!is.na(d[[a]]) & d[[a]] > 0])))
 })
 
+# Share of IHME's full total removed by the source filter, comparison years
+ihme_dropped_share <- map(set_names(groups), \(g) {
+  d <- filter(in_group(g), year %in% overlap_years)
+  round(100 * (1 - sum(d$ihme, na.rm = TRUE) / sum(d$ihme_all, na.rm = TRUE)), 1)
+})
+
 # ---- 7. Write docs/sources.js ----------------------------------------------------------
 
 r2 <- \(v) ifelse(is.na(v), NA, round(v, 2))
@@ -345,6 +362,7 @@ out <- list(
     ihme_prelim_years = I(ihme_prelim_years), coverage = map(coverage, range),
     health_groups = I(health_groups), crs_flows = I(crs_flows),
     ihme_dropped_channels = I(ihme_drop_channels),
+    ihme_dropped_sources = I(ihme_drop_sources), ihme_dropped_share = ihme_dropped_share,
     deflator = paste0("US GDP deflator, ", sub("\\.xlsx$", "", weo_file))
   ),
   countries = by_country,          # iso2: [[year, iati, crs, ihme, ghed], ...] USD millions
